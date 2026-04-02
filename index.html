@@ -91,6 +91,38 @@
   .view-btn { flex: 1; padding: 10px; border: 1px solid #333; border-radius: 10px; background: #1a1a1a; color: #888; font-size: 13px; text-align: center; cursor: pointer; font-weight: 500; }
   .view-btn.active { border-color: #4ecdc4; color: #4ecdc4; background: #1a2f2d; }
 
+  /* Budget Card */
+  .budget-card { background: #1a1a1a; border-radius: 16px; padding: 16px; margin-bottom: 16px; }
+  .budget-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .budget-header h3 { font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+  .budget-edit-btn { background: none; border: 1px solid #333; color: #888; font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+  .budget-edit-btn:hover { border-color: #4ecdc4; color: #4ecdc4; }
+  .budget-ring-row { display: flex; align-items: center; gap: 16px; }
+  .budget-ring { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+  .budget-ring svg { transform: rotate(-90deg); }
+  .budget-ring-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .budget-ring-pct { font-size: 18px; font-weight: 700; }
+  .budget-ring-sub { font-size: 10px; color: #666; }
+  .budget-stats { flex: 1; }
+  .budget-stat { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+  .budget-stat .lbl { color: #888; }
+  .budget-stat .val { font-weight: 600; }
+  .budget-stat .val.remaining { color: #4ecdc4; }
+  .budget-stat .val.over { color: #ff6b6b; }
+  .budget-daily-hint { font-size: 11px; color: #666; margin-top: 8px; text-align: center; }
+
+  /* Budget Setup Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: #1a1a1a; border-radius: 16px; padding: 24px; width: 90%; max-width: 360px; }
+  .modal h3 { font-size: 18px; margin-bottom: 16px; }
+  .modal input { width: 100%; padding: 12px; border: 1px solid #333; border-radius: 10px; background: #252525; color: #e0e0e0; font-size: 16px; margin-bottom: 12px; outline: none; }
+  .modal input:focus { border-color: #4ecdc4; }
+  .modal-actions { display: flex; gap: 10px; }
+  .modal-actions button { flex: 1; padding: 12px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .modal-cancel { background: #252525; color: #888; }
+  .modal-save { background: linear-gradient(135deg, #4ecdc4, #44a08d); color: #fff; }
+
   /* Export */
   .export-bar { display: flex; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #222; }
   .export-btn { flex: 1; padding: 10px; border: 1px solid #333; border-radius: 10px; background: #1a1a1a; color: #888; font-size: 13px; text-align: center; cursor: pointer; }
@@ -102,6 +134,21 @@
   <div class="header">
     <h1>Expenses</h1>
     <div class="today-total" id="todayTotal">Rs.0</div>
+  </div>
+
+  <!-- Budget -->
+  <div class="budget-card" id="budgetCard"></div>
+
+  <!-- Budget Modal -->
+  <div class="modal-overlay" id="budgetModal">
+    <div class="modal">
+      <h3>Set Monthly Budget</h3>
+      <input type="number" id="budgetInput" placeholder="e.g. 15000" inputmode="numeric">
+      <div class="modal-actions">
+        <button class="modal-cancel" onclick="closeBudgetModal()">Cancel</button>
+        <button class="modal-save" onclick="saveBudget()">Save</button>
+      </div>
+    </div>
   </div>
 
   <!-- Quick Add -->
@@ -175,11 +222,87 @@ const CAT_COLORS = {
 };
 
 let expenses = JSON.parse(localStorage.getItem('chief_expenses') || '[]');
+let monthlyBudget = parseFloat(localStorage.getItem('chief_budget') || '0');
 let selectedCat = 'food';
 let currentDate = new Date();
 let currentView = 'day';
 
 function save() { localStorage.setItem('chief_expenses', JSON.stringify(expenses)); }
+function saveBudgetVal() { localStorage.setItem('chief_budget', monthlyBudget.toString()); }
+
+function openBudgetModal() {
+  document.getElementById('budgetModal').classList.add('open');
+  const inp = document.getElementById('budgetInput');
+  inp.value = monthlyBudget || '';
+  inp.focus();
+}
+function closeBudgetModal() { document.getElementById('budgetModal').classList.remove('open'); }
+function saveBudget() {
+  const val = parseFloat(document.getElementById('budgetInput').value);
+  if (!val || val <= 0) return;
+  monthlyBudget = val;
+  saveBudgetVal();
+  closeBudgetModal();
+  render();
+}
+document.getElementById('budgetInput').addEventListener('keydown', e => { if (e.key === 'Enter') saveBudget(); });
+
+function renderBudget() {
+  const now = new Date();
+  const monthKey = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  const monthSpent = expenses.filter(e => e.date.startsWith(monthKey)).reduce((s, e) => s + e.amount, 0);
+  const card = document.getElementById('budgetCard');
+
+  if (!monthlyBudget) {
+    card.innerHTML = `<div style="text-align:center;padding:8px 0;">
+      <div style="color:#666;font-size:13px;margin-bottom:8px;">Set a monthly budget to track spending</div>
+      <button class="budget-edit-btn" onclick="openBudgetModal()" style="padding:10px 24px;font-size:14px;">Set Budget</button>
+    </div>`;
+    return;
+  }
+
+  const remaining = monthlyBudget - monthSpent;
+  const pct = Math.min((monthSpent / monthlyBudget) * 100, 100);
+  const isOver = remaining < 0;
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysLeft = daysInMonth - now.getDate() + 1;
+  const dailyBudget = remaining > 0 ? Math.round(remaining / daysLeft) : 0;
+
+  // Ring color
+  let ringColor = '#4ecdc4';
+  if (pct > 75) ringColor = '#ffd93d';
+  if (pct > 90) ringColor = '#ff6b6b';
+
+  const circumference = 2 * Math.PI * 34;
+  const offset = circumference - (pct / 100) * circumference;
+
+  card.innerHTML = `
+    <div class="budget-header">
+      <h3>Monthly Budget</h3>
+      <button class="budget-edit-btn" onclick="openBudgetModal()">Edit</button>
+    </div>
+    <div class="budget-ring-row">
+      <div class="budget-ring">
+        <svg width="80" height="80">
+          <circle cx="40" cy="40" r="34" fill="none" stroke="#252525" stroke-width="6"/>
+          <circle cx="40" cy="40" r="34" fill="none" stroke="${ringColor}" stroke-width="6"
+            stroke-dasharray="${circumference}" stroke-dashoffset="${offset}" stroke-linecap="round"/>
+        </svg>
+        <div class="budget-ring-label">
+          <span class="budget-ring-pct" style="color:${ringColor}">${Math.round(pct)}%</span>
+          <span class="budget-ring-sub">used</span>
+        </div>
+      </div>
+      <div class="budget-stats">
+        <div class="budget-stat"><span class="lbl">Budget</span><span class="val">${fmt(monthlyBudget)}</span></div>
+        <div class="budget-stat"><span class="lbl">Spent</span><span class="val" style="color:#ff6b6b">${fmt(monthSpent)}</span></div>
+        <div class="budget-stat"><span class="lbl">Left</span><span class="val ${isOver ? 'over' : 'remaining'}">${isOver ? '-' : ''}${fmt(Math.abs(remaining))}</span></div>
+      </div>
+    </div>
+    ${dailyBudget > 0 ? `<div class="budget-daily-hint">${fmt(dailyBudget)}/day for ${daysLeft} days remaining</div>` : ''}
+    ${isOver ? `<div class="budget-daily-hint" style="color:#ff6b6b">Over budget by ${fmt(Math.abs(remaining))}</div>` : ''}
+  `;
+}
 
 function fmt(n) { return 'Rs.' + Number(n).toLocaleString('en-IN'); }
 
@@ -275,6 +398,7 @@ function formatDateLabel() {
 }
 
 function render() {
+  renderBudget();
   const filtered = getFiltered();
   const total = filtered.reduce((s, e) => s + e.amount, 0);
 
