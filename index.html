@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f0f0f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Expenses</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; min-height: 100vh; -webkit-tap-highlight-color: transparent; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+
+  .app { max-width: 480px; margin: 0 auto; padding: 16px; padding-bottom: 80px; }
+
+  /* Floating Add Button (mobile) */
+  .fab { display: none; position: fixed; bottom: 24px; right: 24px; width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #4ecdc4, #44a08d); border: none; color: #fff; font-size: 32px; font-weight: 300; box-shadow: 0 4px 20px rgba(78,205,196,0.4); cursor: pointer; z-index: 100; transition: transform 0.15s; }
+  .fab:active { transform: scale(0.9); }
+  @media (max-width: 600px) { .fab { display: flex; align-items: center; justify-content: center; } }
+
+  /* Swipe to delete */
+  .expense-item { position: relative; overflow: hidden; touch-action: pan-y; }
+  .swipe-delete { position: absolute; right: 0; top: 0; bottom: 0; width: 80px; background: #ff4757; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 600; font-size: 13px; transform: translateX(80px); transition: transform 0.2s; }
+
+  /* Header */
+  .header { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .today-total { font-size: 28px; font-weight: 700; color: #ff6b6b; }
+
+  /* Quick Add */
+  .quick-add { background: #1a1a1a; border-radius: 16px; padding: 16px; margin-bottom: 16px; }
+  .quick-add input, .quick-add select { width: 100%; padding: 12px; border: 1px solid #333; border-radius: 10px; background: #252525; color: #e0e0e0; font-size: 16px; margin-bottom: 10px; outline: none; }
+  .quick-add input:focus, .quick-add select:focus { border-color: #4ecdc4; }
+  .quick-add input::placeholder { color: #666; }
+  .amount-row { display: flex; gap: 10px; }
+  .amount-row input { flex: 1; }
+  .amount-row select { flex: 1; }
+  .add-btn { width: 100%; padding: 14px; border: none; border-radius: 12px; background: linear-gradient(135deg, #4ecdc4, #44a08d); color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.1s; }
+  .add-btn:active { transform: scale(0.97); }
+
+  /* Categories */
+  .categories { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }
+  .cat-btn { padding: 10px 4px; border: 1px solid #333; border-radius: 10px; background: #252525; color: #aaa; font-size: 12px; text-align: center; cursor: pointer; transition: all 0.15s; }
+  .cat-btn.active { border-color: #4ecdc4; color: #4ecdc4; background: #1a2f2d; }
+  .cat-emoji { font-size: 18px; display: block; margin-bottom: 2px; }
+
+  /* Date Nav */
+  .date-nav { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; }
+  .date-nav button { background: #252525; border: 1px solid #333; color: #e0e0e0; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+  .date-nav button:hover { border-color: #4ecdc4; }
+  .date-label { font-size: 15px; font-weight: 500; }
+
+  /* Summary Cards */
+  .summary { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .summary-card { background: #1a1a1a; border-radius: 12px; padding: 12px; text-align: center; }
+  .summary-card .label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+  .summary-card .value { font-size: 20px; font-weight: 700; margin-top: 4px; }
+  .summary-card .value.red { color: #ff6b6b; }
+  .summary-card .value.green { color: #4ecdc4; }
+  .summary-card .value.yellow { color: #ffd93d; }
+
+  /* Expense List */
+  .expense-list { margin-top: 8px; }
+  .expense-item { display: flex; align-items: center; padding: 14px; background: #1a1a1a; border-radius: 12px; margin-bottom: 8px; transition: background 0.15s; }
+  .expense-item:hover { background: #222; }
+  .expense-icon { font-size: 24px; margin-right: 12px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: #252525; border-radius: 10px; }
+  .expense-details { flex: 1; }
+  .expense-details .name { font-size: 14px; font-weight: 500; }
+  .expense-details .time { font-size: 12px; color: #666; margin-top: 2px; }
+  .expense-amount { font-size: 16px; font-weight: 600; color: #ff6b6b; }
+  .delete-btn { background: none; border: none; color: #555; font-size: 16px; cursor: pointer; padding: 4px 8px; margin-left: 8px; border-radius: 6px; }
+  .delete-btn:hover { color: #ff6b6b; background: #2a1a1a; }
+
+  /* Category Breakdown */
+  .breakdown { margin-top: 16px; }
+  .breakdown h3 { font-size: 14px; color: #888; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .bar-row { display: flex; align-items: center; margin-bottom: 8px; }
+  .bar-label { width: 80px; font-size: 13px; color: #aaa; }
+  .bar-track { flex: 1; height: 8px; background: #252525; border-radius: 4px; overflow: hidden; margin: 0 10px; }
+  .bar-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+  .bar-amount { font-size: 13px; font-weight: 500; width: 70px; text-align: right; }
+
+  /* Empty State */
+  .empty { text-align: center; padding: 40px; color: #555; }
+  .empty .big { font-size: 48px; margin-bottom: 12px; }
+
+  /* Month View Toggle */
+  .view-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+  .view-btn { flex: 1; padding: 10px; border: 1px solid #333; border-radius: 10px; background: #1a1a1a; color: #888; font-size: 13px; text-align: center; cursor: pointer; font-weight: 500; }
+  .view-btn.active { border-color: #4ecdc4; color: #4ecdc4; background: #1a2f2d; }
+
+  /* Export */
+  .export-bar { display: flex; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid #222; }
+  .export-btn { flex: 1; padding: 10px; border: 1px solid #333; border-radius: 10px; background: #1a1a1a; color: #888; font-size: 13px; text-align: center; cursor: pointer; }
+  .export-btn:hover { border-color: #4ecdc4; color: #4ecdc4; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>Expenses</h1>
+    <div class="today-total" id="todayTotal">Rs.0</div>
+  </div>
+
+  <!-- Quick Add -->
+  <div class="quick-add">
+    <div class="categories" id="catGrid"></div>
+    <div class="amount-row">
+      <input type="number" id="amountInput" placeholder="Amount" inputmode="numeric">
+      <select id="paymentMode">
+        <option value="UPI">UPI</option>
+        <option value="Cash">Cash</option>
+        <option value="Card">Card</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <input type="text" id="noteInput" placeholder="Note (optional)">
+    <button class="add-btn" onclick="addExpense()">+ Add Expense</button>
+  </div>
+
+  <!-- View Toggle -->
+  <div class="view-toggle">
+    <div class="view-btn active" data-view="day" onclick="setView('day')">Day</div>
+    <div class="view-btn" data-view="week" onclick="setView('week')">Week</div>
+    <div class="view-btn" data-view="month" onclick="setView('month')">Month</div>
+  </div>
+
+  <!-- Date Navigation -->
+  <div class="date-nav">
+    <button onclick="navDate(-1)">&larr;</button>
+    <span class="date-label" id="dateLabel"></span>
+    <button onclick="navDate(1)">&rarr;</button>
+  </div>
+
+  <!-- Summary -->
+  <div class="summary">
+    <div class="summary-card"><div class="label">Spent</div><div class="value red" id="sumSpent">0</div></div>
+    <div class="summary-card"><div class="label">Count</div><div class="value yellow" id="sumCount">0</div></div>
+    <div class="summary-card"><div class="label">Avg</div><div class="value green" id="sumAvg">0</div></div>
+  </div>
+
+  <!-- Category Breakdown -->
+  <div class="breakdown" id="breakdownSection"></div>
+
+  <!-- Expense List -->
+  <div class="expense-list" id="expenseList"></div>
+
+  <!-- Export -->
+  <div class="export-bar">
+    <button class="export-btn" onclick="exportCSV()">Export CSV</button>
+    <button class="export-btn" onclick="clearMonth()">Clear Month</button>
+  </div>
+</div>
+
+<!-- FAB for mobile -->
+<button class="fab" id="fab" onclick="toggleQuickAdd()">+</button>
+
+<script>
+const CATEGORIES = [
+  { id: 'food', emoji: '🍔', label: 'Food' },
+  { id: 'transport', emoji: '🚗', label: 'Travel' },
+  { id: 'shopping', emoji: '🛍️', label: 'Shopping' },
+  { id: 'bills', emoji: '📱', label: 'Bills' },
+  { id: 'grocery', emoji: '🛒', label: 'Grocery' },
+  { id: 'health', emoji: '💊', label: 'Health' },
+  { id: 'fun', emoji: '🎮', label: 'Fun' },
+  { id: 'other', emoji: '📦', label: 'Other' },
+];
+
+const CAT_COLORS = {
+  food: '#ff6b6b', transport: '#4ecdc4', shopping: '#ffd93d', bills: '#a29bfe',
+  grocery: '#55efc4', health: '#fd79a8', fun: '#fdcb6e', other: '#636e72'
+};
+
+let expenses = JSON.parse(localStorage.getItem('chief_expenses') || '[]');
+let selectedCat = 'food';
+let currentDate = new Date();
+let currentView = 'day';
+
+function save() { localStorage.setItem('chief_expenses', JSON.stringify(expenses)); }
+
+function fmt(n) { return 'Rs.' + Number(n).toLocaleString('en-IN'); }
+
+function dateKey(d) { return d.toISOString().split('T')[0]; }
+
+function renderCatGrid() {
+  const grid = document.getElementById('catGrid');
+  grid.innerHTML = CATEGORIES.map(c =>
+    `<div class="cat-btn ${c.id === selectedCat ? 'active' : ''}" onclick="selectCat('${c.id}')">
+      <span class="cat-emoji">${c.emoji}</span>${c.label}
+    </div>`
+  ).join('');
+}
+
+function selectCat(id) { selectedCat = id; renderCatGrid(); }
+
+function addExpense() {
+  const amount = parseFloat(document.getElementById('amountInput').value);
+  if (!amount || amount <= 0) { document.getElementById('amountInput').focus(); return; }
+  const note = document.getElementById('noteInput').value.trim();
+  const mode = document.getElementById('paymentMode').value;
+  const now = new Date();
+  expenses.push({
+    id: Date.now(),
+    amount,
+    category: selectedCat,
+    note,
+    mode,
+    date: dateKey(now),
+    time: now.toTimeString().slice(0, 5),
+    timestamp: now.toISOString()
+  });
+  save();
+  document.getElementById('amountInput').value = '';
+  document.getElementById('noteInput').value = '';
+  currentDate = new Date();
+  currentView = 'day';
+  render();
+}
+
+function deleteExpense(id) {
+  expenses = expenses.filter(e => e.id !== id);
+  save();
+  render();
+}
+
+function getFiltered() {
+  const key = dateKey(currentDate);
+  if (currentView === 'day') {
+    return expenses.filter(e => e.date === key);
+  } else if (currentView === 'week') {
+    const d = new Date(currentDate);
+    const day = d.getDay();
+    const start = new Date(d); start.setDate(d.getDate() - day);
+    const end = new Date(start); end.setDate(start.getDate() + 6);
+    return expenses.filter(e => e.date >= dateKey(start) && e.date <= dateKey(end));
+  } else {
+    const m = key.slice(0, 7);
+    return expenses.filter(e => e.date.startsWith(m));
+  }
+}
+
+function setView(v) {
+  currentView = v;
+  document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  render();
+}
+
+function navDate(dir) {
+  if (currentView === 'day') currentDate.setDate(currentDate.getDate() + dir);
+  else if (currentView === 'week') currentDate.setDate(currentDate.getDate() + dir * 7);
+  else currentDate.setMonth(currentDate.getMonth() + dir);
+  render();
+}
+
+function formatDateLabel() {
+  const opts = { weekday: 'short', day: 'numeric', month: 'short' };
+  if (currentView === 'day') {
+    const today = dateKey(new Date());
+    if (dateKey(currentDate) === today) return 'Today';
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    if (dateKey(currentDate) === dateKey(y)) return 'Yesterday';
+    return currentDate.toLocaleDateString('en-IN', opts);
+  } else if (currentView === 'week') {
+    const d = new Date(currentDate);
+    const day = d.getDay();
+    const start = new Date(d); start.setDate(d.getDate() - day);
+    const end = new Date(start); end.setDate(start.getDate() + 6);
+    return start.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) + ' - ' + end.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  } else {
+    return currentDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+  }
+}
+
+function render() {
+  const filtered = getFiltered();
+  const total = filtered.reduce((s, e) => s + e.amount, 0);
+
+  // Today total (always today)
+  const todayExp = expenses.filter(e => e.date === dateKey(new Date()));
+  document.getElementById('todayTotal').textContent = fmt(todayExp.reduce((s, e) => s + e.amount, 0));
+
+  // Date label
+  document.getElementById('dateLabel').textContent = formatDateLabel();
+
+  // Summary
+  document.getElementById('sumSpent').textContent = fmt(total);
+  document.getElementById('sumCount').textContent = filtered.length;
+  document.getElementById('sumAvg').textContent = filtered.length ? fmt(Math.round(total / filtered.length)) : 'Rs.0';
+
+  // Category breakdown
+  const byCategory = {};
+  filtered.forEach(e => { byCategory[e.category] = (byCategory[e.category] || 0) + e.amount; });
+  const maxCat = Math.max(...Object.values(byCategory), 1);
+  const breakdownHTML = Object.keys(byCategory).length ? '<h3>By Category</h3>' +
+    Object.entries(byCategory)
+      .sort((a, b) => b[1] - a[1])
+      .map(([cat, amt]) => {
+        const c = CATEGORIES.find(x => x.id === cat) || CATEGORIES[7];
+        return `<div class="bar-row">
+          <span class="bar-label">${c.emoji} ${c.label}</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${(amt/maxCat*100)}%;background:${CAT_COLORS[cat]}"></div></div>
+          <span class="bar-amount">${fmt(amt)}</span>
+        </div>`;
+      }).join('') : '';
+  document.getElementById('breakdownSection').innerHTML = breakdownHTML;
+
+  // Expense list
+  const list = document.getElementById('expenseList');
+  if (!filtered.length) {
+    list.innerHTML = '<div class="empty"><div class="big">💸</div>No expenses here yet</div>';
+    return;
+  }
+  list.innerHTML = filtered
+    .sort((a, b) => b.id - a.id)
+    .map(e => {
+      const c = CATEGORIES.find(x => x.id === e.category) || CATEGORIES[7];
+      return `<div class="expense-item">
+        <div class="expense-icon">${c.emoji}</div>
+        <div class="expense-details">
+          <div class="name">${e.note || c.label}${e.mode !== 'UPI' ? ' <span style="color:#555;font-size:11px">· ' + e.mode + '</span>' : ''}</div>
+          <div class="time">${e.date} · ${e.time}</div>
+        </div>
+        <div class="expense-amount">${fmt(e.amount)}</div>
+        <button class="delete-btn" onclick="deleteExpense(${e.id})">&times;</button>
+      </div>`;
+    }).join('');
+}
+
+function exportCSV() {
+  const filtered = getFiltered();
+  if (!filtered.length) return alert('No expenses to export');
+  const rows = [['Date', 'Time', 'Category', 'Amount', 'Mode', 'Note']];
+  filtered.forEach(e => {
+    const c = CATEGORIES.find(x => x.id === e.category) || CATEGORIES[7];
+    rows.push([e.date, e.time, c.label, e.amount, e.mode, e.note || '']);
+  });
+  const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `expenses-${dateKey(currentDate)}.csv`;
+  a.click();
+}
+
+function clearMonth() {
+  const m = dateKey(currentDate).slice(0, 7);
+  if (!confirm(`Delete ALL expenses for ${currentDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}?`)) return;
+  expenses = expenses.filter(e => !e.date.startsWith(m));
+  save();
+  render();
+}
+
+// Keyboard shortcut: Enter to add
+document.getElementById('amountInput').addEventListener('keydown', e => { if (e.key === 'Enter') addExpense(); });
+document.getElementById('noteInput').addEventListener('keydown', e => { if (e.key === 'Enter') addExpense(); });
+
+// Mobile: collapse quick-add, show FAB
+const quickAdd = document.querySelector('.quick-add');
+const fab = document.getElementById('fab');
+let quickAddOpen = true;
+
+function toggleQuickAdd() {
+  quickAddOpen = !quickAddOpen;
+  quickAdd.style.display = quickAddOpen ? 'block' : 'none';
+  fab.textContent = quickAddOpen ? '×' : '+';
+  if (quickAddOpen) document.getElementById('amountInput').focus();
+}
+
+if (window.innerWidth <= 600) {
+  quickAdd.style.display = 'none';
+  quickAddOpen = false;
+}
+
+// Swipe to delete on mobile
+let touchStartX = 0;
+let swipingItem = null;
+
+document.addEventListener('touchstart', e => {
+  const item = e.target.closest('.expense-item');
+  if (!item) return;
+  touchStartX = e.touches[0].clientX;
+  swipingItem = item;
+});
+
+document.addEventListener('touchmove', e => {
+  if (!swipingItem) return;
+  const dx = touchStartX - e.touches[0].clientX;
+  if (dx > 20) {
+    swipingItem.style.transform = `translateX(-${Math.min(dx, 80)}px)`;
+  }
+});
+
+document.addEventListener('touchend', e => {
+  if (!swipingItem) return;
+  const dx = touchStartX - (e.changedTouches[0]?.clientX || touchStartX);
+  if (dx > 60) {
+    const deleteBtn = swipingItem.querySelector('.delete-btn');
+    if (deleteBtn) deleteBtn.click();
+  }
+  swipingItem.style.transform = '';
+  swipingItem = null;
+});
+
+// Service Worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js');
+}
+
+renderCatGrid();
+render();
+</script>
+</body>
+</html>
